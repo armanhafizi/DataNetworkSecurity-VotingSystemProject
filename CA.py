@@ -6,6 +6,12 @@ class CA:
 
     def __init__(self, port):
         self.PORT = port
+        key = RSA.generate(1024)
+        pub_key = key.publickey()
+        private_key = key.exportKey()
+        f = open("PR_CA.key", "wb").write(private_key)
+        public_key = pub_key.exportKey()
+        f = open("PU_CA.key", "wb").write(private_key)
         
 
     def initiate(self):
