@@ -1,28 +1,28 @@
-import socket
-import json
-import threading
+import socket, json, threading, binascii
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP
+from encrypt_decrypt import rsa_encrypt
 
 class Client:
     HOST = "127.0.0.1"
     CA_FLAG = False
     AS_FLAG = False
     VS_FLAG = False
-    ID = 0
-    NAME = ""
     state = 0
 
     def __init__(self, id, name):
         self.ID = id
         self.NAME = name
+        self.PU_CA = RSA.importKey(open("PU_CA.key", "rb").read())
 
     def connect(self, port, name):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((self.HOST, port))
             while True:
                 if (self.state == 0 and name == "CA"):
-                    data = {"message": "PU_CA[ID, NAME, TS1, LT1, E_K[hash[M]]]"}
-                    data = json.dumps(data)
-                    s.sendall(bytes(data, encoding="utf-8"))
+                    msg = {"ID": self.ID, "NAME": self.NAME, "TS1": 1, "LT1": 10, "signature": 'E_K[hash[M]]'}
+                    data = rsa_encrypt("PU_CA.key", bytes(json.dumps(msg), encoding="utf-8"))
+                    s.sendall(data)
                     self.state = 1
                 if (self.state == 1 and name == "CA"):
                     data = s.recv(1024)

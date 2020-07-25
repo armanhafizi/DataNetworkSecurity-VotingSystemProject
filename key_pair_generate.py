@@ -6,8 +6,7 @@ from Crypto.PublicKey import RSA
 
 
 def generate_keys():
-    modulus_length = 1024
-    key = RSA.generate(modulus_length)
+    key = RSA.generate(1024)
     pub_key = key.publickey()
     private_key = key.exportKey()
     f = open("PR_CA.key", "wb").write(private_key)

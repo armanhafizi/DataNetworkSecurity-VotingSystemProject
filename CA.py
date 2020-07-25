@@ -1,5 +1,5 @@
 import socket, json
-from OpenSSL import crypto, SSL
+from Crypto.PublicKey import RSA
 
 class CA:
     HOST = "127.0.0.1"
