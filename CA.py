@@ -2,6 +2,7 @@ import socket, json
 from Crypto.PublicKey import RSA
 from encrypt_decrypt import rsa_decrypt, rsa_encrypt
 from symmetric_enc_dec import symmetric_decrypt
+from sha_hash import sha_hash
 
 
 class CA:
@@ -29,8 +30,6 @@ class CA:
                 msg_enc = data["message"]
                 key_enc = bytes.fromhex(data["key"])
                 key = rsa_decrypt("PR_CA.key", key_enc)
-                print(key.decode("utf-8"))
-                print(msg_enc)
                 message = symmetric_decrypt(key.decode("utf-8"), msg_enc)
                 data = json.loads(message)
                 print(data)
@@ -40,8 +39,10 @@ class CA:
                 ts = data["TS1"]
                 lt = data["LT1"]
                 signature = symmetric_decrypt(str(id), enc_signature)
-                if str(id) + name == signature:
-                    print("hell yeah")
+                if sha_hash(bytes(str(id) + name, encoding="utf-8")) == signature:
+                    print("Correct Signature")
+                else:
+                    print("incorrect signature")
                 #TODO check ID and corresponding name
                 #TODO check hash
                 data = {"message": "K_C[PU_AS, PR_C, cert, TS2, LT2, hash[M]"}

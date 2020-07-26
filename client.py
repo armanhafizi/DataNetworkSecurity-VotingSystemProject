@@ -28,7 +28,6 @@ class Client:
                     key = ''.join(random.choices(string.ascii_uppercase +
                              string.digits, k = 5))
                     key_enc = rsa_encrypt("PU_CA.key", bytes(key, encoding="utf-8"))
-                    print(len(key_enc))
                     msg_enc = symmetric_encrypt(key, json.dumps(msg))
                     data = json.dumps({"message": msg_enc.decode("utf-8"), "key": key_enc.hex()})
                     s.sendall(bytes(data, encoding="utf-8"))
