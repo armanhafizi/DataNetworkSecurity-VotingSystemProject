@@ -1,7 +1,7 @@
-import socket, json
+import socket, json, random, string
 from Crypto.PublicKey import RSA
 from encrypt_decrypt import rsa_decrypt, rsa_encrypt
-from symmetric_enc_dec import symmetric_decrypt
+from symmetric_enc_dec import symmetric_decrypt, symmetric_encrypt
 from sha_hash import sha_hash
 
 
@@ -10,12 +10,6 @@ class CA:
 
     def __init__(self, port):
         self.PORT = port
-        key = RSA.generate(1024)
-        pub_key = key.publickey()
-        private_key = key.exportKey()
-        f = open("PR_CA.key", "wb").write(private_key)
-        public_key = pub_key.exportKey()
-        f = open("PU_CA.key", "wb").write(private_key)
         
 
     def initiate(self):
@@ -44,8 +38,28 @@ class CA:
                     print("incorrect signature")
                 #TODO check ID and corresponding name
                 #TODO check hash
-                data = {"message": "K_C[PU_AS, PR_C, cert, TS2, LT2, hash[M]"}
-                data = json.dumps(data)
-                conn.sendall(bytes(data, encoding="utf-8"))
+
+                # Create PR PU and send it to client with certificate and signature
+                data = {"message": "K_C[PU_AS, PR_C, PR_CA[cert], TS2, LT2, hash[M]"}
+                key = RSA.generate(1024)
+                pub_key = key.publickey()
+                private_key_c = key.exportKey()
+                public_key_c = pub_key.exportKey()
+                
+                public_key_as = open("PU_AS.key", "r", encoding="utf-8").read()
+                certification = {"ID": id, "PU_C": public_key_c.decode("utf-8")}
+                M = public_key_as + private_key_c.decode("utf-8") + json.dumps(certification)
+                
+                rand_key_1 = ''.join(random.choices(string.ascii_uppercase +
+                             string.digits, k = 5))
+                key_1_enc = rsa_encrypt("PU_CA.key", bytes(rand_key_1, encoding="utf-8"))
+                message_enc_1 = symmetric_encrypt(rand_key_1, json.dumps(certification))
+                cert_encrypted = json.dumps({"message": message_enc_1.decode("utf-8"), "key": key_1_enc.hex()})
+                
+                signature = sha_hash(bytes(M, encoding="utf-8"))
+
+                message = {"PU_AS": public_key_as, "PR_C": private_key_c.decode("utf-8"), "cert_encrypted": cert_encrypted, "TS2": 2, "LT2": 18, "signature": signature}
+                data = symmetric_encrypt(str(id) + 'S3', json.dumps(message))
+                conn.sendall(data)
 ca = CA(8087)
 ca.initiate()

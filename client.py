@@ -1,7 +1,7 @@
 import socket, json, threading, binascii, random, string, codecs
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
-from encrypt_decrypt import rsa_encrypt
+from encrypt_decrypt import rsa_encrypt, rsa_decrypt
 from sha_hash import sha_hash
 from symmetric_enc_dec import symmetric_encrypt, symmetric_decrypt
 
@@ -33,14 +33,29 @@ class Client:
                     s.sendall(bytes(data, encoding="utf-8"))
                     self.state = 1
                 if (self.state == 1 and name == "CA"):
-                    data = s.recv(1024)
-                    data = data.decode(encoding="utf-8")
+                    data = s.recv(4096)
+                    data = json.loads(symmetric_decrypt(str(self.ID) + 'S3', data))
+                    self.PU_AS = data["PU_AS"]
+                    self.PR_C = data["PR_C"]
+                    cert_enc = json.loads(data["cert_encrypted"])
+                    ts = data["TS2"]
+                    lt = data["LT2"]
+                    signature = data["signature"]
+    
+                    k1_enc = bytes.fromhex(cert_enc["key"])
+                    m1_enc = cert_enc["message"]
+                    k1 = rsa_decrypt("PR_CA.key", k1_enc)
+                    m1 = symmetric_decrypt(k1.decode("utf-8"), m1_enc)
+                    certification = json.loads(m1)
+                    self.PU_C = certification["PU_C"]
+                    id = certification["ID"]
                     #TODO check TS and LT
                     #TODO   save PU_AS PR_C cert
                     #TODO   check hash
                     self.state = 2
                 if (self.state == 2 and name == "AS"):
                     data = {"message": "PU_AS[ID, Certification, TS3, LT3, E_PR_C[hash[M]]]"}
+                    # certification = str(self.ID) + 
                     data = json.dumps(data)
                     s.sendall(bytes(data, encoding="utf-8"))
                     self.state = 3
