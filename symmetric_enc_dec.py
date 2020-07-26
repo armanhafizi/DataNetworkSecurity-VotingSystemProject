@@ -17,6 +17,6 @@ def symmetric_decrypt(key, enc):
     cipher = AES.new(key, AES.MODE_CFB, iv)
     return cipher.decrypt(enc[AES.block_size:]).decode('utf-8')
 
-enc = symmetric_encrypt(str(1234145987), "just work")
-print(enc)
-print(symmetric_decrypt(str(1234145987), enc))
+# enc = symmetric_encrypt(str(1234145987), "just work")
+# print(enc)
+# print(symmetric_decrypt(str(1234145987), enc))

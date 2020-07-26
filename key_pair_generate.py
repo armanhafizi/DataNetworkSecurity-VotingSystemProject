@@ -15,4 +15,4 @@ def generate_keys():
     return private_key, public_key
 
 
-k = generate_keys()
+# k = generate_keys()

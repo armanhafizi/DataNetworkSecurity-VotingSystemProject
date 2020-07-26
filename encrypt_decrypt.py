@@ -14,5 +14,5 @@ def rsa_decrypt(pr_key_path, msg_enc):
     decrypted = decryptor.decrypt(msg_enc)
     return decrypted
 
-# print(rsa_encrypt(key_path, msg))
-print(rsa_decrypt("PR_CA.key", rsa_encrypt("PU_CA.key", b"hello bitch")))
+# print(rsa_encrypt("PU_CA.key", b"6GF3D"))
+# print(rsa_decrypt("PR_CA.key", rsa_encrypt("PU_CA.key", b"6GF3D")))
