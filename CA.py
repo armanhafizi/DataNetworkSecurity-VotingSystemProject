@@ -32,7 +32,6 @@ class CA:
                 key = rsa_decrypt("PR_CA.key", key_enc)
                 message = symmetric_decrypt(key.decode("utf-8"), msg_enc)
                 data = json.loads(message)
-                print(data)
                 enc_signature = data["signature"]
                 id = data["ID"]
                 name = data["NAME"]

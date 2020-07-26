@@ -40,7 +40,7 @@ class Client:
                     #TODO   check hash
                     self.state = 2
                 if (self.state == 2 and name == "AS"):
-                    data = {"message": "PU_AS[ID, Cert, TS3, LT3, E_PR_C[hash[M]]]"}
+                    data = {"message": "PU_AS[ID, Certification, TS3, LT3, E_PR_C[hash[M]]]"}
                     data = json.dumps(data)
                     s.sendall(bytes(data, encoding="utf-8"))
                     self.state = 3
