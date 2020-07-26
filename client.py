@@ -1,7 +1,9 @@
 import socket, json, threading, binascii
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
-from encrypt_decrypt import rsa_encrypt
+from encrypt_decrypt import rsa_encrypt, rsa_decrypt
+from sha_hash import sha_hash
+from symmetric_enc_dec import symmetric_encrypt, symmetric_decrypt
 
 class Client:
     HOST = "127.0.0.1"
@@ -20,7 +22,9 @@ class Client:
             s.connect((self.HOST, port))
             while True:
                 if (self.state == 0 and name == "CA"):
-                    msg = {"ID": self.ID, "NAME": self.NAME, "TS1": 1, "LT1": 10, "signature": 'E_K[hash[M]]'}
+                    M = {"ID": self.ID, "NAME": self.NAME}
+                    signature = symmetric_encrypt(str(self.ID), sha_hash(bytes(json.dumps(M), encoding="utf-8")))
+                    msg = {"ID": self.ID, "NAME": self.NAME, "TS1": 1, "LT1": 10, "signature": signature}
                     data = rsa_encrypt("PU_CA.key", bytes(json.dumps(msg), encoding="utf-8"))
                     s.sendall(data)
                     self.state = 1
