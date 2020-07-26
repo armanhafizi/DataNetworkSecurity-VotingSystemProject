@@ -1,4 +1,4 @@
-import socket, json, ast
+import socket, json
 from Crypto.PublicKey import RSA
 from encrypt_decrypt import rsa_decrypt, rsa_encrypt
 from symmetric_enc_dec import symmetric_decrypt
@@ -25,13 +25,13 @@ class CA:
             with conn:
                 print('Connected: ', addr)
                 data = conn.recv(1024)
-                data = ast.literal_eval(data)
-                msg_enc = data[0]
-                key_enc = data[1]
-                print(len(bytes(key_enc, encoding="utf-8")))
-                key = rsa_decrypt("PR_CA.key", bytes(key_enc, encoding="utf-8"))
-                print(key)
-                message = symmetric_decrypt(key, msg_enc)
+                data = json.loads(data)
+                msg_enc = data["message"]
+                key_enc = bytes.fromhex(data["key"])
+                key = rsa_decrypt("PR_CA.key", key_enc)
+                print(key.decode("utf-8"))
+                print(msg_enc)
+                message = symmetric_decrypt(key.decode("utf-8"), msg_enc)
                 data = json.loads(message)
                 print(data)
                 enc_signature = data["signature"]
@@ -40,7 +40,7 @@ class CA:
                 ts = data["TS1"]
                 lt = data["LT1"]
                 signature = symmetric_decrypt(str(id), enc_signature)
-                if id + name == signature:
+                if str(id) + name == signature:
                     print("hell yeah")
                 #TODO check ID and corresponding name
                 #TODO check hash

@@ -23,17 +23,14 @@ class Client:
             while True:
                 if (self.state == 0 and name == "CA"):
                     M = str(self.ID) + self.NAME
-                    # print(sha_hash(bytes(M, encoding="utf-8")))
                     signature = symmetric_encrypt(str(self.ID), sha_hash(bytes(M, encoding="utf-8")))
                     msg = {"ID": self.ID, "NAME": self.NAME, "TS1": 1, "LT1": 10, "signature": signature.decode("utf-8")}
-                    # key = ''.join(random.choices(string.ascii_uppercase +
-                    #          string.digits, k = 5))
-                    key = '5GH89'
+                    key = ''.join(random.choices(string.ascii_uppercase +
+                             string.digits, k = 5))
                     key_enc = rsa_encrypt("PU_CA.key", bytes(key, encoding="utf-8"))
-                    print(key_enc)
+                    print(len(key_enc))
                     msg_enc = symmetric_encrypt(key, json.dumps(msg))
-                    data = json.dumps({"message": msg_enc.decode("utf-8"), "key": key_enc.decode("utf-8")})
-                    # print(data)
+                    data = json.dumps({"message": msg_enc.decode("utf-8"), "key": key_enc.hex()})
                     s.sendall(bytes(data, encoding="utf-8"))
                     self.state = 1
                 if (self.state == 1 and name == "CA"):
