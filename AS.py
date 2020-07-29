@@ -12,17 +12,19 @@ class AS:
 
     def __init__(self, port):
         self.PORT = port
-        f = open('CA_DB/info.txt', 'wt')
-        f.write('0000000001,Arman,False\n')
-        f.write('0000000002,Amir Hossein,False\n')
-        f.write('0000000003,Sepideh,False\n')
-        f.write('0000000004,Kiana,False\n')
-        f.write('0000000005,Taha,False\n')
+        f = open('AS_DB/policy.txt', 'wt')
+        # ID forbidden age
+        f.write('0000000001,False,21\n')
+        f.write('0000000002,False,39\n')
+        f.write('0000000003,True,23\n')
+        f.write('0000000004,False,14\n')
+        f.write('0000000005,False,40\n')
         f.close()
-        #log = open('CA_log.txt', 'wt')
+        #log = open('AS_DB/log.txt', 'wt')
 
     def initiate(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             s.bind((self.HOST, self.PORT))
             s.listen()
             conn, addr = s.accept()
@@ -33,8 +35,8 @@ class AS:
                 msg_enc = data["message"]
                 key_enc = bytes.fromhex(data["key"])
                 # decrypt key
-                PR_AS = RSA.importKey(open('PR_AS.key', "rb").read())
-                key = rsa_decrypt(PR_AS, key_enc)
+                PR_AS = open('PR_AS.key', "rb").read()
+                key = rsa_decrypt(RSA.importKey(PR_AS), key_enc)
                 # decrypt message
                 message = symmetric_decrypt(key.decode("utf-8"), msg_enc)
                 data = json.loads(message)
@@ -45,58 +47,61 @@ class AS:
                 cert_encrypted = data['cert_encrypted']
                 ts = data["TS3"]
                 lt = data["LT3"]
+                # check hash
+                M = ID_C + PU_C + cert_encrypted
+                status_hash = False
+                if self.verify_sign(RSA.importKey(PU_C), signature, bytes(sha_hash(bytes(M, encoding="utf-8")), encoding='utf-8')):
+                    status_hash = True
+                print('Hash Status:' + str(status_hash))
                 # check certification
                 certification = {"ID": ID_C, "PU_C": PU_C}
                 certification = bytes(json.dumps(certification), encoding = 'utf-8')
-                PU_CA = RSA.importKey(open('PU_CA.key', "rb").read())
-                status_cert = self.verify_sign(PU_CA, cert_encrypted, certification)
-                print('certification:'+str(status_cert))
+                PU_CA = open('PU_CA.key', "rb").read()
+                status_cert = self.verify_sign(RSA.importKey(PU_CA), cert_encrypted, certification)
+                print('Certification Status:'+str(status_cert))
                 # TODO check timestamp
-                # check hash
-                M = ID_C + cert_encrypted
-                if self.verify_sign(RSA.importKey(PU_C), signature, bytes(sha_hash(bytes(M, encoding="utf-8")), encoding='utf-8')):
-                    print("Correct Signature")
+                if status_hash and status_cert:
                     # read database
-                    f = open('CA_DB/info.txt', 'r')
+                    f = open('AS_DB/policy.txt', 'r')
                     line = f.readlines()
                     f.close()
                     for i in range(len(line)):
                         # find client
-                        if line[i].split(',')[0] == str(id) and line[i].split(',')[1] == name:
-                            if line[i].split(',')[2] == 'False\n':
-                                # write in database
-                                f = open('CA_DB/info.txt', 'w')
-                                line[i] = id + ',' + name + ',True\n'
-                                line_new = ''.join(line)
-                                f.write(line_new)
-                                f.close()
-                                # generate PU PR for that person
-                                PR_NAME = 'CA_DB/PR_' + str(id) + '.key'
-                                PU_NAME = 'CA_DB/PU_' + str(id) + '.key'
-                                generate_keys(PR_NAME, PU_NAME)
-                            # read keys
-                            PR_C = open('CA_DB/PR_'+id+'.key', "r", encoding="utf-8").read()
-                            PU_C = open('CA_DB/PU_'+id+'.key', "r", encoding="utf-8").read()
-                            PU_AS = open("PU_AS.key", "r", encoding="utf-8").read()
-                            # certification
-                            certification = {"ID": id, "PU_C": PU_C}
-                            certification = bytes(json.dumps(certification), encoding = 'utf-8')
-                            # sign certification
-                            PR_CA = RSA.importKey(open('PR_CA.key', "rb").read())
-                            cert_encrypted = self.sign_data(PR_CA, certification)
-                            cert_encrypted = cert_encrypted.decode('utf-8')
-                            # hash message with signature
-                            M = PU_AS + PR_C + cert_encrypted # raw message
-                            signature = sha_hash(bytes(M, encoding="utf-8"))
-                            # final message
-                            message = {"PU_AS": PU_AS, "PR_C": PR_C, 'PU_C': PU_C, "cert_encrypted": cert_encrypted, "TS2": 2, "LT2": 18, "signature": signature}
-                            # encrypt message by K_C
-                            data = symmetric_encrypt(K_C, json.dumps(message))
-                            # send message
-                            conn.sendall(data)
-                            break
-                else:
-                    print("Incorrect signature")
+                        l = line[i].split(',')
+                        if l[0] == ID_C:
+                            if l[1] == 'False' and int(l[2][0:-1]) >= 16: # check policy
+                                # read keys
+                                PR_AS = open('PR_AS.key', 'r', encoding="utf-8").read()
+                                PU_AS = open('PU_AS.key', 'r', encoding="utf-8").read()
+                                PU_VS = open('PU_VS.key', 'r', encoding="utf-8").read()
+                                # sign hash of ticket
+                                SK_voter = ''.join(random.choices(string.ascii_uppercase + string.digits, k = 5))
+                                ticket = SK_voter + PU_C
+                                ticket_signature = self.sign_data(RSA.importKey(PR_AS), bytes(sha_hash(bytes(ticket, encoding="utf-8")),encoding="utf-8"))
+                                ticket_signature = ticket_signature.decode('utf-8')
+                                # encrypt ticket
+                                msg = {'SK_voter': SK_voter, 'PU_C': PU_C, 'signature': ticket_signature}
+                                # encrypt key - ticket
+                                key = ''.join(random.choices(string.ascii_uppercase + string.digits, k = 5))
+                                key_enc = rsa_encrypt(RSA.importKey(PU_VS), bytes(key, encoding="utf-8"))
+                                # encrypt message - ticket
+                                msg_enc = symmetric_encrypt(key, json.dumps(msg))
+                                ticket_encrypted = json.dumps({"message": msg_enc.decode("utf-8"), "key": key_enc.hex()})
+                                # sign hash of message
+                                M = ticket_encrypted + SK_voter + PU_VS
+                                signature = self.sign_data(RSA.importKey(PR_AS) , bytes(sha_hash(bytes(M, encoding="utf-8")),encoding="utf-8"))
+                                signature = signature.decode('utf-8')
+                                # final message
+                                msg = {'ticket_encrypted': ticket_encrypted,'SK_voter': SK_voter, 'PU_VS': PU_VS, 'TS4': 1, 'LT4': 10, 'signature': signature}
+                                # encrypt key
+                                key = ''.join(random.choices(string.ascii_uppercase + string.digits, k = 5))
+                                key_enc = rsa_encrypt(RSA.importKey(PU_C), bytes(key, encoding="utf-8"))
+                                # encrypt message
+                                msg_enc = symmetric_encrypt(key, json.dumps(msg))
+                                data = json.dumps({"message": msg_enc.decode("utf-8"), "key": key_enc.hex()})
+                                # send message
+                                conn.sendall(bytes(data, encoding="utf-8"))
+                                break
 
     def verify_sign(self, PU, signature, data):
         signer = PKCS1_v1_5.new(PU)

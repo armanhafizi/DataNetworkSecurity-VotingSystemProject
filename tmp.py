@@ -1,9 +1,10 @@
-import json, string
+import json, string, random
 from Crypto.PublicKey import RSA
 from Crypto.Signature import PKCS1_v1_5
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.Hash import SHA256
 from base64 import b64decode, b64encode
+from encrypt_decrypt import rsa_encrypt, rsa_decrypt
 import rsa
 def verify_sign(PU_loc, signature, data):
     PU = open(PU_loc, 'r').read()
@@ -25,10 +26,8 @@ def sign_data(PR_loc, data):
     sign = signer.sign(digest)
     return b64encode(sign)
 def main():
-    data = {'id':2, 'x':'lwA9fQKqpEmmxrMUGYK7VzCbojmpF9FtOJPXa1QKwLSXblbVrZXtKGVybPmuqRl8Y+jMhtdq9zMlQv5PDai325H44oa7OwpWnVrDehKq4DPDpXhuUjyGqvKdvz45P8y2L5tc+jvvzLi3t6D7m2oVPoJ+qb8aVWBFKDj0y112hpM='}
-    d = json.dumps(data)
-    e = json.loads(d)
-    print(d)
+    v = int(input())
+    print(v)
 
 if __name__== "__main__":
     main()

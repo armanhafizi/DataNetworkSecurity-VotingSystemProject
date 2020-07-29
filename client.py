@@ -15,6 +15,7 @@ class Client:
     def __init__(self, id, name):
         self.ID = id
         self.NAME = name
+        self.VOTE = 0
         self.PU_CA = RSA.importKey(open("PU_CA.key", "rb").read())
 
     def connect(self, port, name):
@@ -53,25 +54,27 @@ class Client:
                     ts = data["TS2"]
                     lt = data["LT2"]
                     signature = data["signature"]
-                    # JUST‌ TO CHECK !!! decrpyt certificaion
-                    certification = {"ID": self.ID, "PU_C": self.PU_C}
-                    certification = bytes(json.dumps(certification), encoding = 'utf-8')
-                    PU_CA = RSA.importKey(open('PU_CA.key', "rb").read())
-                    status = self.verify_sign(PU_CA, self.cert_encrypted, certification)
-                    print('certification:'+str(status))
+                    # # !!! JUST‌ TO CHECK - DELETE THIS LATER !!! decrpyt certificaion
+                    # certification = {"ID": self.ID, "PU_C": self.PU_C}
+                    # certification = bytes(json.dumps(certification), encoding = 'utf-8')
+                    # PU_CA = RSA.importKey(open('PU_CA.key', "rb").read())
+                    # status = self.verify_sign(PU_CA, self.cert_encrypted, certification)
+                    # print('certification:'+str(status))
                     #TODO check TS and LT
                     # check hash
+                    status_hash = False
                     if sha_hash(bytes(self.PU_AS + self.PR_C + self.cert_encrypted, encoding="utf-8")) == signature:
-                        print("Correct Signature")
+                        status_hash = True
+                    print(str(self.state) + ' Hash Status:' + str(status_hash))
+                    if status_hash:
                         # next state
                         self.state = 2
                     else:
-                        print("Incorrect Signature")
                         # previous state
                         self.state = 0
                 if (self.state == 2 and name == "AS"):
                     # sign hash of message
-                    M = self.ID + self.cert_encrypted
+                    M = self.ID + self.PU_C + self.cert_encrypted
                     signature = self.sign_data(RSA.importKey(self.PR_C) , bytes(sha_hash(bytes(M, encoding="utf-8")),encoding="utf-8"))
                     signature = signature.decode('utf-8')
                     # final message
@@ -87,25 +90,116 @@ class Client:
                     # next state
                     self.state = 3
                 if (self.state == 3 and name == "AS"):
-                    data = s.recv(1024)
-                    data = data.decode(encoding="utf-8")
+                    # receive
+                    data = s.recv(4096)
+                    data = json.loads(data)
+                    msg_enc = data["message"]
+                    key_enc = bytes.fromhex(data["key"])
+                    # decrypt key
+                    key = rsa_decrypt(RSA.importKey(self.PR_C), key_enc)
+                    # decrypt message
+                    message = symmetric_decrypt(key.decode("utf-8"), msg_enc)
+                    data = json.loads(message)
+                    # extract data
+                    self.ticket_encrypted = data['ticket_encrypted']
+                    self.SK_voter = data['SK_voter']
+                    self.PU_VS = data["PU_VS"]
+                    ts = data["TS4"]
+                    lt = data["LT4"]
+                    signature = data["signature"]
                     #TODO check TS and LT
-                    #TODO   save PU_VS vote_cert SK_voter
-                    #TODO   check hash
-                    self.state = 4
+                    # # !!! JUST‌ TO CHECK - DELETE THIS LATER !!! decrpyt ticket
+                    # ticket_encrypted = json.loads(ticket_encrypted)
+                    # msg_enc = ticket_encrypted['message']
+                    # key_enc = bytes.fromhex(ticket_encrypted['key'])
+                    # # decrypt key
+                    # PR_VS = open('PR_VS.key', 'rb').read()
+                    # key = rsa_decrypt(RSA.importKey(PR_VS), key_enc)
+                    # # decrypt message
+                    # message = symmetric_decrypt(key.decode("utf-8"), msg_enc)
+                    # data = json.loads(message)
+                    # # extract data
+                    # SK_voter_2 = data['SK_voter']
+                    # PU_C_2 = data['PU_C']
+                    # signature_2 = data['signature']
+                    # ticket = SK_voter_2 + PU_C_2
+                    # status_ticket = self.verify_sign(RSA.importKey(self.PU_AS), signature_2, bytes(sha_hash(bytes(ticket, encoding="utf-8")),encoding="utf-8"))
+                    # print('Ticket Status:'+str(status_ticket))
+                    # check hash
+                    status_hash = False
+                    M = self.ticket_encrypted + self.SK_voter + self.PU_VS
+                    if self.verify_sign(RSA.importKey(self.PU_AS), signature, bytes(sha_hash(bytes(M, encoding="utf-8")), encoding='utf-8')):
+                        status_hash = True
+                    print(str(self.state) + ' Hash Status:' + str(status_hash))
+                    if status_hash:
+                        # next state
+                        self.state = 4
+                    else:
+                        # previous state
+                        self.state = 2
                 if (self.state == 4 and name == 'VS'):
-                    data = {"message": "PU_VS[vote, E_SK[hash[vote], vote_cert, PR_C[hash[M]]]"}
-                    data = json.dumps(data)
+                    # choose vote
+                    self.choose_vote()
+                    # encrypt hash of vote
+                    vote_encrypted = symmetric_encrypt(self.SK_voter, sha_hash(bytes(str(self.VOTE), encoding="utf-8")))
+                    # build message
+                    M = str(self.VOTE) + vote_encrypted.hex() + self.ticket_encrypted
+                    # hash whole message
+                    signature = sha_hash(bytes(M, encoding="utf-8"))
+                    # final message
+                    msg = {'vote': str(self.VOTE),'vote_encrypted': vote_encrypted.decode('utf-8'), 'ticket_encrypted': self.ticket_encrypted, 'signature': signature}
+                    # encrypt key
+                    key = ''.join(random.choices(string.ascii_uppercase + string.digits, k = 5))
+                    key_enc = rsa_encrypt(RSA.importKey(self.PU_VS), bytes(key, encoding="utf-8"))
+                    # encrypt message
+                    msg_enc = symmetric_encrypt(key, json.dumps(msg))
+                    data = json.dumps({"message": msg_enc.decode("utf-8"), "key": key_enc.hex()})
+                    # send message
                     s.sendall(bytes(data, encoding="utf-8"))
+                    # next state
                     self.state = 5
                 if (self.state == 5 and name == 'VS'):
-                    data = s.recv(1024)
-                    data = data.decode(encoding="utf-8")
-                    #TODO check TS and LT
-                    #TODO   check hash and status
-                    self.state = 6
+                    # receive
+                    data = s.recv(4096)
+                    data = json.loads(data)
+                    msg_enc = data['message']
+                    key_enc = bytes.fromhex(data['key'])
+                    # decrypt key
+                    key = rsa_decrypt(RSA.importKey(self.PR_C), key_enc)
+                    # decrypt message
+                    message = symmetric_decrypt(key.decode('utf-8'), msg_enc)
+                    data = json.loads(message)
+                    # extract data
+                    status_vote = data['status']
+                    signature = data['signature']
+                    # check hash
+                    status_hash = False
+                    if self.verify_sign(RSA.importKey(self.PU_VS), signature, bytes(sha_hash(bytes(status_vote, encoding="utf-8")), encoding='utf-8')):
+                        status_hash = True
+                    print(str(self.state) + ' Hash Status:' + str(status_hash))
+                    print(str(self.state) + ' Vote Status:' + status_vote)
+                    if status_vote == 'SUCCESSFUL' and status_hash:
+                        # next state
+                        self.state = 6
+                    else:
+                        # previous state
+                        self.state = 2
                 if (self.state == 6):
                     s.close()
+
+
+    def choose_vote(self):
+        while True:
+            print('Choose your vote option please: 1 2 3')
+            v1 = int(input())
+            print('Confirm your vote option please: 1 2 3')
+            v2 = int(input())
+            if v1 == v2:
+                break
+            else:
+                print('Error: different votes')
+        self.VOTE = v1
+        return
 
 
     def verify_sign(self, PU, signature, data):

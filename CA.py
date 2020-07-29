@@ -28,10 +28,11 @@ class CA:
         f.write('0000000004,Kiana,False\n')
         f.write('0000000005,Taha,False\n')
         f.close()
-        #log = open('CA_log.txt', 'wt')
+        #log = open('CA_DB/log.txt', 'wt')
 
     def initiate(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             s.bind((self.HOST, self.PORT))
             s.listen()
             conn, addr = s.accept()
@@ -49,41 +50,44 @@ class CA:
                 data = json.loads(message)
                 # extract data
                 enc_signature = data["signature"]
-                id = data["ID"]
+                ID_C = data["ID"]
                 name = data["NAME"]
                 ts = data["TS1"]
                 lt = data["LT1"]
                 # decrypt hash
-                K_C = id + 'S3'
+                K_C = ID_C + 'S3'
                 signature = symmetric_decrypt(K_C, enc_signature)
                 # TODO check timestamp
                 # check hash
-                if sha_hash(bytes(str(id) + name, encoding="utf-8")) == signature:
-                    print("Correct Signature")
+                status_hash = False
+                if sha_hash(bytes(ID_C + name, encoding="utf-8")) == signature:
+                    status_hash = True
+                print('Hash Status:'+str(status_hash))
+                if status_hash:
                     # read database
                     f = open('CA_DB/info.txt', 'r')
                     line = f.readlines()
                     f.close()
                     for i in range(len(line)):
                         # find client
-                        if line[i].split(',')[0] == str(id) and line[i].split(',')[1] == name:
+                        if line[i].split(',')[0] == ID_C and line[i].split(',')[1] == name:
                             if line[i].split(',')[2] == 'False\n':
                                 # write in database
                                 f = open('CA_DB/info.txt', 'w')
-                                line[i] = id + ',' + name + ',True\n'
+                                line[i] = ID_C + ',' + name + ',True\n'
                                 line_new = ''.join(line)
                                 f.write(line_new)
                                 f.close()
                                 # generate PU PR for that person
-                                PR_NAME = 'CA_DB/PR_' + str(id) + '.key'
-                                PU_NAME = 'CA_DB/PU_' + str(id) + '.key'
+                                PR_NAME = 'CA_DB/PR_' + ID_C + '.key'
+                                PU_NAME = 'CA_DB/PU_' + ID_C + '.key'
                                 generate_keys(PR_NAME, PU_NAME)
                             # read keys
-                            PR_C = open('CA_DB/PR_'+id+'.key', "r", encoding="utf-8").read()
-                            PU_C = open('CA_DB/PU_'+id+'.key', "r", encoding="utf-8").read()
+                            PR_C = open('CA_DB/PR_'+ID_C+'.key', "r", encoding="utf-8").read()
+                            PU_C = open('CA_DB/PU_'+ID_C+'.key', "r", encoding="utf-8").read()
                             PU_AS = open("PU_AS.key", "r", encoding="utf-8").read()
                             # certification
-                            certification = {"ID": id, "PU_C": PU_C}
+                            certification = {"ID": ID_C, "PU_C": PU_C}
                             certification = bytes(json.dumps(certification), encoding = 'utf-8')
                             # sign certification
                             PR_CA = RSA.importKey(open('PR_CA.key', "rb").read())
@@ -99,8 +103,6 @@ class CA:
                             # send message
                             conn.sendall(data)
                             break
-                else:
-                    print("Incorrect signature")
 
     def verify_sign(self, PU, signature, data):
         signer = PKCS1_v1_5.new(PU)
