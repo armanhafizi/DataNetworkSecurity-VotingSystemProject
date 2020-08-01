@@ -6,6 +6,7 @@ from sha_hash import sha_hash
 from Crypto.Signature import PKCS1_v1_5
 from Crypto.Hash import SHA256
 from base64 import b64decode, b64encode
+from datetime import datetime, timedelta
 
 class AS:
     HOST = "127.0.0.1"
@@ -47,6 +48,15 @@ class AS:
                 cert_encrypted = data['cert_encrypted']
                 ts = data["TS3"]
                 lt = data["LT3"]
+                # check timestamp
+                t1 = datetime.strptime(ts, '%Y-%m-%d %H:%M:%S.%f')
+                t2 = datetime.now()
+                l = datetime.strptime(lt, '%H:%M:%S')
+                delta = timedelta(hours=l.hour, minutes=l.minute, seconds=l.second)
+                status_time = False
+                if t2-t1 <= delta:
+                    status_time = True
+                print('Timestamp Status:'+str(status_time))
                 # check hash
                 M = ID_C + PU_C + cert_encrypted
                 status_hash = False
@@ -59,8 +69,19 @@ class AS:
                 PU_CA = open('PU_CA.key', "rb").read()
                 status_cert = self.verify_sign(RSA.importKey(PU_CA), cert_encrypted, certification)
                 print('Certification Status:'+str(status_cert))
-                # TODO check timestamp
-                if status_hash and status_cert:
+                if status_hash == False:
+                    # final message
+                    msg = {'validity':'NO', 'error': 'server: Wrong Hash'}
+                    data = json.dumps(msg)
+                elif status_time == False:
+                    # final message
+                    msg = {'validity':'NO', 'error': 'server: Timstamp Expired'}
+                    data = json.dumps(msg)
+                elif status_cert == False:
+                    # final message
+                    msg = {'validity':'NO', 'error': 'server: Wrong Certification'}
+                    data = json.dumps(msg)
+                else: # every thing is fine
                     # read database
                     f = open('AS_DB/policy.txt', 'r')
                     line = f.readlines()
@@ -91,17 +112,23 @@ class AS:
                                 M = ticket_encrypted + SK_voter + PU_VS
                                 signature = self.sign_data(RSA.importKey(PR_AS) , bytes(sha_hash(bytes(M, encoding="utf-8")),encoding="utf-8"))
                                 signature = signature.decode('utf-8')
+                                # timestamp
+                                TS4 = datetime.now()
+                                LT4 = timedelta(seconds=5)
                                 # final message
-                                msg = {'ticket_encrypted': ticket_encrypted,'SK_voter': SK_voter, 'PU_VS': PU_VS, 'TS4': 1, 'LT4': 10, 'signature': signature}
+                                msg = {'ticket_encrypted': ticket_encrypted,'SK_voter': SK_voter, 'PU_VS': PU_VS, 'TS4': str(TS4), 'LT4': str(LT4), 'signature': signature}
                                 # encrypt key
                                 key = ''.join(random.choices(string.ascii_uppercase + string.digits, k = 5))
                                 key_enc = rsa_encrypt(RSA.importKey(PU_C), bytes(key, encoding="utf-8"))
                                 # encrypt message
                                 msg_enc = symmetric_encrypt(key, json.dumps(msg))
-                                data = json.dumps({"message": msg_enc.decode("utf-8"), "key": key_enc.hex()})
-                                # send message
-                                conn.sendall(bytes(data, encoding="utf-8"))
-                                break
+                                data = json.dumps({'validity':'YES', "message": msg_enc.decode("utf-8"), "key": key_enc.hex()})
+                            else: # not allowed to vote
+                                msg = {'validity':'NO', 'error': 'server: NOT Allowed to Vote'}
+                                data = json.dumps(msg)
+                            break
+                # send message
+                conn.sendall(bytes(data, encoding="utf-8"))
 
     def verify_sign(self, PU, signature, data):
         signer = PKCS1_v1_5.new(PU)
@@ -119,5 +146,5 @@ class AS:
         sign = signer.sign(digest)
         return b64encode(sign)
         
-as_ = AS(8088)
+as_ = AS(8090)
 as_.initiate()

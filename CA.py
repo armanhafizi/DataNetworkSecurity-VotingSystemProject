@@ -6,6 +6,7 @@ from sha_hash import sha_hash
 from Crypto.Signature import PKCS1_v1_5
 from Crypto.Hash import SHA256
 from base64 import b64decode, b64encode
+from datetime import datetime, timedelta
 
 def generate_keys(PR_NAME, PU_NAME):
     key = RSA.generate(1024)
@@ -57,13 +58,27 @@ class CA:
                 # decrypt hash
                 K_C = ID_C + 'S3'
                 signature = symmetric_decrypt(K_C, enc_signature)
-                # TODO check timestamp
+                # check timestamp
+                t1 = datetime.strptime(ts, '%Y-%m-%d %H:%M:%S.%f')
+                t2 = datetime.now()
+                l = datetime.strptime(lt, '%H:%M:%S')
+                delta = timedelta(hours=l.hour, minutes=l.minute, seconds=l.second)
+                status_time = False
+                if t2-t1 <= delta:
+                    status_time = True
+                print('Timestamp Status:'+str(status_time))
                 # check hash
                 status_hash = False
                 if sha_hash(bytes(ID_C + name, encoding="utf-8")) == signature:
                     status_hash = True
                 print('Hash Status:'+str(status_hash))
-                if status_hash:
+                if status_hash == False:
+                    # final message
+                    message = {'validity':'NO', 'error': 'server: Wrong Hash'}
+                elif status_time == False:
+                    # final message
+                    message = {'validity':'NO', 'error': 'server: Timstamp Expired'}
+                else: # every thing is fine
                     # read database
                     f = open('CA_DB/info.txt', 'r')
                     line = f.readlines()
@@ -96,13 +111,16 @@ class CA:
                             # hash message with signature
                             M = PU_AS + PR_C + cert_encrypted # raw message
                             signature = sha_hash(bytes(M, encoding="utf-8"))
+                            # timestamp
+                            TS2 = datetime.now()
+                            LT2 = timedelta(seconds=5)
                             # final message
-                            message = {"PU_AS": PU_AS, "PR_C": PR_C, 'PU_C': PU_C, "cert_encrypted": cert_encrypted, "TS2": 2, "LT2": 18, "signature": signature}
-                            # encrypt message by K_C
-                            data = symmetric_encrypt(K_C, json.dumps(message))
-                            # send message
-                            conn.sendall(data)
+                            message = {'validity':'YES', "PU_AS": PU_AS, "PR_C": PR_C, 'PU_C': PU_C, "cert_encrypted": cert_encrypted, "TS2": str(TS2), "LT2": str(LT2), "signature": signature}
                             break
+                # encrypt message by K_C
+                data = symmetric_encrypt(K_C, json.dumps(message))
+                # send message
+                conn.sendall(data)
 
     def verify_sign(self, PU, signature, data):
         signer = PKCS1_v1_5.new(PU)

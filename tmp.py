@@ -5,6 +5,7 @@ from Crypto.Cipher import PKCS1_OAEP
 from Crypto.Hash import SHA256
 from base64 import b64decode, b64encode
 from encrypt_decrypt import rsa_encrypt, rsa_decrypt
+from datetime import datetime, timedelta
 import rsa
 def verify_sign(PU_loc, signature, data):
     PU = open(PU_loc, 'r').read()
@@ -26,8 +27,8 @@ def sign_data(PR_loc, data):
     sign = signer.sign(digest)
     return b64encode(sign)
 def main():
-    v = int(input())
-    print(v)
-
+    if True:
+        x = 2
+    print(x)
 if __name__== "__main__":
     main()

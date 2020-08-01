@@ -7,6 +7,7 @@ from symmetric_enc_dec import symmetric_encrypt, symmetric_decrypt
 from Crypto.Signature import PKCS1_v1_5
 from Crypto.Hash import SHA256
 from base64 import b64decode, b64encode
+from datetime import datetime, timedelta
 
 class Client:
     HOST = "127.0.0.1"
@@ -27,8 +28,11 @@ class Client:
                     M = self.ID + self.NAME
                     K_C = self.ID + 'S3'
                     signature = symmetric_encrypt(K_C, sha_hash(bytes(M, encoding="utf-8")))
+                    # timestamp
+                    TS1 = datetime.now()
+                    LT1 = timedelta(seconds=5)
                     # final message
-                    msg = {"ID": self.ID, "NAME": self.NAME, "TS1": 1, "LT1": 10, "signature": signature.decode("utf-8")}
+                    msg = {"ID": self.ID, "NAME": self.NAME, "TS1": str(TS1), "LT1": str(LT1), "signature": signature.decode("utf-8")}
                     # encrypt key
                     key = ''.join(random.choices(string.ascii_uppercase + string.digits, k = 5))
                     PU_CA = RSA.importKey(open('PU_CA.key', "rb").read())
@@ -47,6 +51,10 @@ class Client:
                     K_C = self.ID + 'S3'
                     data = json.loads(symmetric_decrypt(K_C, data))
                     # extract data
+                    if data['validity'] == 'NO': # invalid reply
+                        print(data['error'])
+                        self.state = 0 # send last message again
+                        continue
                     self.PU_AS = data["PU_AS"]
                     self.PR_C = data["PR_C"]
                     self.PU_C = data["PU_C"]
@@ -54,19 +62,21 @@ class Client:
                     ts = data["TS2"]
                     lt = data["LT2"]
                     signature = data["signature"]
-                    # # !!! JUST‌ TO CHECK - DELETE THIS LATER !!! decrpyt certificaion
-                    # certification = {"ID": self.ID, "PU_C": self.PU_C}
-                    # certification = bytes(json.dumps(certification), encoding = 'utf-8')
-                    # PU_CA = RSA.importKey(open('PU_CA.key', "rb").read())
-                    # status = self.verify_sign(PU_CA, self.cert_encrypted, certification)
-                    # print('certification:'+str(status))
-                    #TODO check TS and LT
+                    # check timestamp
+                    t1 = datetime.strptime(ts, '%Y-%m-%d %H:%M:%S.%f')
+                    t2 = datetime.now()
+                    l = datetime.strptime(lt, '%H:%M:%S')
+                    delta = timedelta(hours=l.hour, minutes=l.minute, seconds=l.second)
+                    status_time = False
+                    if t2-t1 <= delta:
+                        status_time = True
+                    print(str(self.state) + ' Timestamp Status:' + str(status_time))
                     # check hash
                     status_hash = False
                     if sha_hash(bytes(self.PU_AS + self.PR_C + self.cert_encrypted, encoding="utf-8")) == signature:
                         status_hash = True
                     print(str(self.state) + ' Hash Status:' + str(status_hash))
-                    if status_hash:
+                    if status_hash and status_time:
                         # next state
                         self.state = 2
                     else:
@@ -77,8 +87,11 @@ class Client:
                     M = self.ID + self.PU_C + self.cert_encrypted
                     signature = self.sign_data(RSA.importKey(self.PR_C) , bytes(sha_hash(bytes(M, encoding="utf-8")),encoding="utf-8"))
                     signature = signature.decode('utf-8')
+                    # timestamp
+                    TS3 = datetime.now()
+                    LT3 = timedelta(seconds=5)
                     # final message
-                    msg = {"ID": self.ID,'PU_C': self.PU_C, "cert_encrypted": self.cert_encrypted, "TS3": 1, "LT3": 10, 'signature': signature}
+                    msg = {"ID": self.ID,'PU_C': self.PU_C, "cert_encrypted": self.cert_encrypted, "TS3": str(TS3), "LT3": str(LT3), 'signature': signature}
                     # encrypt key
                     key = ''.join(random.choices(string.ascii_uppercase + string.digits, k = 5))
                     key_enc = rsa_encrypt(RSA.importKey(self.PU_AS), bytes(key, encoding="utf-8"))
@@ -93,6 +106,14 @@ class Client:
                     # receive
                     data = s.recv(4096)
                     data = json.loads(data)
+                    # check validity
+                    if data['validity'] == 'NO': # invalid reply
+                        print(data['error'])
+                        if data['error'] == 'server: NOT Allowed to Vote':
+                            self.state = 0 # back to beginning
+                        else:
+                            self.state = 2 # send last message again
+                        continue
                     msg_enc = data["message"]
                     key_enc = bytes.fromhex(data["key"])
                     # decrypt key
@@ -107,31 +128,22 @@ class Client:
                     ts = data["TS4"]
                     lt = data["LT4"]
                     signature = data["signature"]
-                    #TODO check TS and LT
-                    # # !!! JUST‌ TO CHECK - DELETE THIS LATER !!! decrpyt ticket
-                    # ticket_encrypted = json.loads(ticket_encrypted)
-                    # msg_enc = ticket_encrypted['message']
-                    # key_enc = bytes.fromhex(ticket_encrypted['key'])
-                    # # decrypt key
-                    # PR_VS = open('PR_VS.key', 'rb').read()
-                    # key = rsa_decrypt(RSA.importKey(PR_VS), key_enc)
-                    # # decrypt message
-                    # message = symmetric_decrypt(key.decode("utf-8"), msg_enc)
-                    # data = json.loads(message)
-                    # # extract data
-                    # SK_voter_2 = data['SK_voter']
-                    # PU_C_2 = data['PU_C']
-                    # signature_2 = data['signature']
-                    # ticket = SK_voter_2 + PU_C_2
-                    # status_ticket = self.verify_sign(RSA.importKey(self.PU_AS), signature_2, bytes(sha_hash(bytes(ticket, encoding="utf-8")),encoding="utf-8"))
-                    # print('Ticket Status:'+str(status_ticket))
+                    # check timestamp
+                    t1 = datetime.strptime(ts, '%Y-%m-%d %H:%M:%S.%f')
+                    t2 = datetime.now()
+                    l = datetime.strptime(lt, '%H:%M:%S')
+                    delta = timedelta(hours=l.hour, minutes=l.minute, seconds=l.second)
+                    status_time = False
+                    if t2-t1 <= delta:
+                        status_time = True
+                    print(str(self.state) + ' Timestamp Status:' + str(status_time))
                     # check hash
                     status_hash = False
                     M = self.ticket_encrypted + self.SK_voter + self.PU_VS
                     if self.verify_sign(RSA.importKey(self.PU_AS), signature, bytes(sha_hash(bytes(M, encoding="utf-8")), encoding='utf-8')):
                         status_hash = True
                     print(str(self.state) + ' Hash Status:' + str(status_hash))
-                    if status_hash:
+                    if status_hash and status_time:
                         # next state
                         self.state = 4
                     else:
@@ -162,6 +174,14 @@ class Client:
                     # receive
                     data = s.recv(4096)
                     data = json.loads(data)
+                    # check validity
+                    if data['validity'] == 'NO': # invalid reply
+                        print(data['error'])
+                        if data['error'] == 'server: Invalid Vote Ticket':
+                            self.state = 0 # get back to beginning
+                        else:
+                            self.state = 4 # send last message again
+                        continue
                     msg_enc = data['message']
                     key_enc = bytes.fromhex(data['key'])
                     # decrypt key
@@ -171,13 +191,13 @@ class Client:
                     data = json.loads(message)
                     # extract data
                     status_vote = data['status']
+                    print(str(self.state) + ' Vote Status:' + status_vote)
                     signature = data['signature']
                     # check hash
                     status_hash = False
                     if self.verify_sign(RSA.importKey(self.PU_VS), signature, bytes(sha_hash(bytes(status_vote, encoding="utf-8")), encoding='utf-8')):
                         status_hash = True
                     print(str(self.state) + ' Hash Status:' + str(status_hash))
-                    print(str(self.state) + ' Vote Status:' + status_vote)
                     if status_vote == 'SUCCESSFUL' and status_hash:
                         # next state
                         self.state = 6
@@ -222,8 +242,8 @@ class Client:
 
     def initiate(self):
         t1 = threading.Thread(target=self.connect, args=(8087, "CA"))
-        t2 = threading.Thread(target=self.connect, args=(8088, "AS"))
-        t3 = threading.Thread(target=self.connect, args=(8089, "VS"))
+        t2 = threading.Thread(target=self.connect, args=(8090, "AS"))
+        t3 = threading.Thread(target=self.connect, args=(8091, "VS"))
         t1.start()
         t2.start()
         t3.start()

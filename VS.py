@@ -6,6 +6,7 @@ from sha_hash import sha_hash
 from Crypto.Signature import PKCS1_v1_5
 from Crypto.Hash import SHA256
 from base64 import b64decode, b64encode
+from datetime import datetime, timedelta
 
 class VS:
     HOST = "127.0.0.1"
@@ -72,7 +73,19 @@ class VS:
                 if sha_hash(bytes(vote, encoding='utf-8')) == vote_decrypted:
                     status_vote = True
                 print('Vote Status:' + str(status_vote))
-                if status_hash and status_ticket and status_vote:
+                if status_hash == False:
+                    # final message
+                    msg = {'validity':'NO', 'error': 'server: Wrong Hash'}
+                    data = json.dumps(msg)
+                elif status_ticket == False:
+                    # final message
+                    msg = {'validity':'NO', 'error': 'server: Invalid Vote Ticket'}
+                    data = json.dumps(msg)
+                elif status_vote == False:
+                    # final message
+                    msg = {'validity':'NO', 'error': 'server: Vote Encrypted Wrongly'}
+                    data = json.dumps(msg)
+                else: # every thing is fine
                     # read database
                     f = open('VS_DB/voters.txt', 'r')
                     line = f.read()
@@ -114,9 +127,9 @@ class VS:
                     key_enc = rsa_encrypt(RSA.importKey(PU_C), bytes(key, encoding="utf-8"))
                     # encrypt message
                     msg_enc = symmetric_encrypt(key, json.dumps(msg))
-                    data = json.dumps({'message': msg_enc.decode("utf-8"), 'key': key_enc.hex()})
-                    # send message
-                    conn.sendall(bytes(data, encoding="utf-8"))
+                    data = json.dumps({'validity':'YES', 'message': msg_enc.decode("utf-8"), 'key': key_enc.hex()})
+                # send message
+                conn.sendall(bytes(data, encoding="utf-8"))
                     
 
     def verify_sign(self, PU, signature, data):
@@ -135,5 +148,5 @@ class VS:
         sign = signer.sign(digest)
         return b64encode(sign)
         
-vs_ = VS(8089)
+vs_ = VS(8091)
 vs_.initiate()
