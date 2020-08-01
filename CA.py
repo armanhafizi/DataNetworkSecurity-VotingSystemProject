@@ -29,7 +29,8 @@ class CA:
         f.write('0000000004,Kiana,False\n')
         f.write('0000000005,Taha,False\n')
         f.close()
-        #log = open('CA_DB/log.txt', 'wt')
+        log = open('CA_DB/log.txt', 'wt')
+        log.close()
 
     def initiate(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -49,8 +50,14 @@ class CA:
                     key = rsa_decrypt(PR_CA, key_enc)
                     # decrypt message
                     message = symmetric_decrypt(key.decode("utf-8"), msg_enc)
-                    data = json.loads(message)
+                    # logging received data
+                    log = open('CA_DB/log.txt', 'a')
+                    log.write('received from {}: '.format(addr))
+                    log.write(message)
+                    log.write('\n')
+                    log.close()
                     # extract data
+                    data = json.loads(message)
                     enc_signature = data["signature"]
                     ID_C = data["ID"]
                     name = data["NAME"]
@@ -58,6 +65,12 @@ class CA:
                     if (not len(ID_C) == 10 or not ID_C.isnumeric()):
                         message = {'validity':'NO', 'error': 'server: Incorrect ID format'}
                         K_C = ID_C + 'S3'
+                        # logging received data
+                        log = open('CA_DB/log.txt', 'a')
+                        log.write('sent to {}: '.format(addr))
+                        log.write(message)
+                        log.write('\n')
+                        log.close()
                         data = symmetric_encrypt(K_C, json.dumps(message))
                         conn.sendall(data)
                         continue
@@ -129,6 +142,12 @@ class CA:
                                 break
                         if (not flag_exists):
                             message = {'validity':'NO', 'error': 'server: Name or ID does not exist'} 
+                    # logging sent data
+                    log = open('CA_DB/log.txt', 'a')
+                    log.write('sent to {}: '.format(addr))
+                    log.write(json.dumps(message))
+                    log.write('\n')
+                    log.close()
                     # encrypt message by K_C
                     data = symmetric_encrypt(K_C, json.dumps(message))
                     # send message

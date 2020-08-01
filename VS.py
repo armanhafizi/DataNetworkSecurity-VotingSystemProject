@@ -20,7 +20,8 @@ class VS:
         f = open('VS_DB/voters.txt', 'wt')
         # list of public keys
         f.close()
-        #log = open('AS_DB/log.txt', 'wt')
+        log = open('AS_DB/log.txt', 'wt')
+        log.close()
 
     def initiate(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -40,6 +41,12 @@ class VS:
                     key = rsa_decrypt(RSA.importKey(PR_VS), key_enc)
                     # decrypt message
                     message = symmetric_decrypt(key.decode("utf-8"), msg_enc)
+                    # logging received data
+                    log = open('VS_DB/log.txt', 'a')
+                    log.write('received from {}: '.format(addr))
+                    log.write(message)
+                    log.write('\n')
+                    log.close()
                     data = json.loads(message)
                     # extract data
                     signature = data['signature']
@@ -69,6 +76,12 @@ class VS:
                     # Handle bad vote option(send error if vote is not 1, 2 or 3)
                     if (not(vote == "1" or vote == "2" or vote == "3")):
                         msg = {'validity':'NO', 'error': 'server: Incorrect vote number'}
+                        # logging sent data
+                        log = open('VS_DB/log.txt', 'a')
+                        log.write('sent to {}: '.format(addr))
+                        log.write(json.dumps(msg))
+                        log.write('\n')
+                        log.close()
                         key = ''.join(random.choices(string.ascii_uppercase + string.digits, k = 5))
                         key_enc = rsa_encrypt(RSA.importKey(PU_C), bytes(key, encoding="utf-8"))
                         msg_enc = symmetric_encrypt(key, json.dumps(msg))
@@ -129,6 +142,12 @@ class VS:
                         signature = signature.decode('utf-8')
                         # final message
                         msg = {'validity': 'YES', 'status': status, 'signature': signature}
+                    # logging sent data
+                    log = open('VS_DB/log.txt', 'a')
+                    log.write('sent to {}: '.format(addr))
+                    log.write(json.dumps(msg))
+                    log.write('\n')
+                    log.close()
                     # encrypt key
                     key = ''.join(random.choices(string.ascii_uppercase + string.digits, k = 5))
                     key_enc = rsa_encrypt(RSA.importKey(PU_C), bytes(key, encoding="utf-8"))

@@ -21,7 +21,8 @@ class AS:
         f.write('0000000004,False,14\n')
         f.write('0000000005,False,40\n')
         f.close()
-        #log = open('AS_DB/log.txt', 'wt')
+        log = open('AS_DB/log.txt', 'wt')
+        log.close()
 
     def initiate(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -41,6 +42,12 @@ class AS:
                     key = rsa_decrypt(RSA.importKey(PR_AS), key_enc)
                     # decrypt message
                     message = symmetric_decrypt(key.decode("utf-8"), msg_enc)
+                    # logging received data
+                    log = open('AS_DB/log.txt', 'a')
+                    log.write('received from {}: '.format(addr))
+                    log.write(message)
+                    log.write('\n')
+                    log.close()
                     data = json.loads(message)
                     # extract data
                     signature = data["signature"]
@@ -118,6 +125,12 @@ class AS:
                                 else: # not allowed to vote
                                     msg = {'validity':'NO', 'error': 'server: NOT Allowed to Vote'}
                                 break
+                    # logging received data
+                    log = open('AS_DB/log.txt', 'a')
+                    log.write('sent to {}: '.format(addr))
+                    log.write(json.dumps(msg))
+                    log.write('\n')
+                    log.close()
                     key = ''.join(random.choices(string.ascii_uppercase + string.digits, k = 5))
                     # encrypt key
                     key_enc = rsa_encrypt(RSA.importKey(PU_C), bytes(key, encoding="utf-8"))
